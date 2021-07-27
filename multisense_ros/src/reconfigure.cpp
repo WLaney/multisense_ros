@@ -371,12 +371,24 @@ template<class T> void Reconfigure::configureCamera(image::Config& cfg, const T&
     // Set all other image config from dynamic reconfigure
 
     cfg.setFps(dyn.fps);
-    cfg.setGain(dyn.gain);
-    cfg.setExposure(dyn.exposure_time * 1e6);
-    cfg.setAutoExposure(dyn.auto_exposure);
-    cfg.setAutoExposureMax(dyn.auto_exposure_max_time * 1e6);
-    cfg.setAutoExposureDecay(dyn.auto_exposure_decay);
-    cfg.setAutoExposureThresh(dyn.auto_exposure_thresh);
+
+    std::vector<image::ExposureConfig> secondaryExposures;
+    //for (size_t i = 0 ; i < d.secondaryExposureConfigs.size() ; ++i)
+    {
+        image::ExposureConfig secondaryConfig;
+
+        secondaryConfig.setExposure(dyn.exposure_time * 1e6);
+        secondaryConfig.setAutoExposure(dyn.auto_exposure);
+        secondaryConfig.setAutoExposureMax(dyn.auto_exposure_max_time * 1e6);
+        secondaryConfig.setAutoExposureDecay(dyn.auto_exposure_decay);
+        secondaryConfig.setGain(dyn.gain);
+        secondaryConfig.setAutoExposureThresh(dyn.auto_exposure_thresh);
+
+        secondaryExposures.push_back(secondaryConfig);
+    }
+
+    cfg.setSecondaryExposures(secondaryExposures);
+
     cfg.setWhiteBalance(dyn.white_balance_red,
                         dyn.white_balance_blue);
     cfg.setAutoWhiteBalance(dyn.auto_white_balance);
