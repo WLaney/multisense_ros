@@ -317,6 +317,12 @@ Camera::Camera(Channel* driver, const std::string& tf_prefix) :
     }
 
     //
+    // Get timesync parameters
+    device_nh_.getParam("ptp_time_offset_secs", ptp_time_offset_secs_);
+    device_nh_.getParam("ptp_time_sync", ptp_time_sync_);
+    device_nh_.getParam("network_time_sync", network_time_sync_);
+
+    //
     // Get the camera config
 
     image::Config image_config;
@@ -781,8 +787,18 @@ void Camera::histogramCallback(const image::Header& header)
         Status status = driver_->getImageHistogram(header.frameId, mh);
         if (Status_Ok == status) {
             rh.frame_count = header.frameId;
-            rh.time_stamp  = ros::Time(header.timeSeconds,
-                                       1000 * header.timeMicroSeconds);
+            rh.time_stamp  = ros::Time::now();
+
+            if (header.timeSeconds != 0)
+            {
+                rh.time_stamp = ros::Time(header.timeSeconds,
+                    1000 * header.timeMicroSeconds);
+                if (ptp_time_sync_ && !network_time_sync_)
+                {
+                    rh.time_stamp += ros::Duration(ptp_time_offset_secs_);
+                }
+            }
+
             rh.width  = header.width;
             rh.height = header.height;
             switch(header.source) {
@@ -809,7 +825,15 @@ void Camera::jpegImageCallback(const image::Header& header)
         return;
     }
 
-    const ros::Time t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     const uint32_t height    = header.height;
     const uint32_t width     = header.width;
@@ -879,7 +903,15 @@ void Camera::disparityImageCallback(const image::Header& header)
 
     const uint32_t imageSize = (header.width * header.height * header.bitsPerPixel) / 8;
 
-    const ros::Time t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     switch(header.source) {
     case Source_Disparity:
@@ -1048,7 +1080,15 @@ void Camera::monoCallback(const image::Header& header)
         return;
     }
 
-    ros::Time t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     switch(header.source) {
     case Source_Luma_Left:
@@ -1156,7 +1196,15 @@ void Camera::rectCallback(const image::Header& header)
         return;
     }
 
-    ros::Time t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     switch(header.source) {
     case Source_Luma_Rectified_Left:
@@ -1288,7 +1336,15 @@ void Camera::depthCallback(const image::Header& header)
         return;
     }
 
-    const ros::Time t(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     const float    bad_point = std::numeric_limits<float>::quiet_NaN();
     const uint32_t depthSize = header.height * header.width * sizeof(float);
@@ -1461,7 +1517,15 @@ void Camera::pointCloudCallback(const image::Header& header)
         return;
     }
 
-    const ros::Time t(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     //
     // Resize our corresponding pointclouds if we plan on publishing them
@@ -1698,9 +1762,19 @@ void Camera::rawCamDataCallback(const image::Header& header)
             raw_cam_data_.gain              = left_luma_rect.gain;
             raw_cam_data_.exposure_time     = left_luma_rect.exposure;
             raw_cam_data_.frame_count       = left_luma_rect.frameId;
-            raw_cam_data_.time_stamp        = ros::Time(left_luma_rect.timeSeconds, 1000 * left_luma_rect.timeMicroSeconds);
+            raw_cam_data_.time_stamp        = ros::Time::now();
             raw_cam_data_.width             = left_luma_rect.width;
             raw_cam_data_.height            = left_luma_rect.height;
+
+            if (left_luma_rect.timeSeconds != 0)
+            {
+                raw_cam_data_.time_stamp = ros::Time(header.timeSeconds,
+                    1000 * header.timeMicroSeconds);
+                if (ptp_time_sync_ && !network_time_sync_)
+                {
+                    raw_cam_data_.time_stamp += ros::Duration(ptp_time_offset_secs_);
+                }
+            }
 
             const uint32_t disparity_size = header.width * header.height;
 
@@ -1727,7 +1801,15 @@ void Camera::colorImageCallback(const image::Header& header)
         return;
     }
 
-    const ros::Time t(header.timeSeconds, 1000 * header.timeMicroSeconds);
+    ros::Time t = ros::Time::now();
+    if (header.timeSeconds != 0)
+    {
+        t = ros::Time(header.timeSeconds, 1000 * header.timeMicroSeconds);
+        if (ptp_time_sync_ && !network_time_sync_)
+        {
+            t += ros::Duration(ptp_time_offset_secs_);
+        }
+    }
 
     switch (header.source)
     {
